@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
@@ -71,6 +72,7 @@ Remove blockchain and state databases`,
 			dbImportCmd,
 			dbExportCmd,
 			dbGetTrieSnapshotCmd,
+			dbGetJournalCmd,
 		},
 	}
 	dbInspectCmd = cli.Command{
@@ -250,6 +252,21 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.TrieSnapshotCheckpoint,
 		},
 		Description: "This command displays the information about trie snapshot",
+	}
+	dbGetJournalCmd = cli.Command{
+		Action:    utils.MigrateFlags(dbGetJournal),
+		Name:      "getjournal",
+		Usage:     "Show the journal entries at the block hash",
+		ArgsUsage: "<blockhash>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+		},
+		Description: "This command displays journal entries at the block hash",
 	}
 )
 
@@ -730,5 +747,25 @@ func dbGetTrieSnapshot(ctx *cli.Context) error {
 	for _, snapshot := range snapshots {
 		fmt.Fprintln(writer, snapshot)
 	}
+	return nil
+}
+
+func dbGetJournal(ctx *cli.Context) error {
+	if ctx.NArg() < 1 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
+
+	hash := common.HexToHash(ctx.Args().Get(0))
+	journal := state.DecodeJournal(rawdb.ReadStoredJournal(db, hash))
+	for _, entry := range journal {
+		fmt.Printf("%s\n", entry)
+	}
+
 	return nil
 }
