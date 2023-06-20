@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -122,6 +123,9 @@ type StateDB struct {
 	StorageUpdated int
 	AccountDeleted int
 	StorageDeleted int
+
+	OptimizedMode bool
+	blockJournal  []journalEntry
 }
 
 // New creates a new state from a given trie.
@@ -438,7 +442,9 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 		return false
 	}
 	s.journal.append(suicideChange{
-		account:     &addr,
+		store: &suicideChangeStore{
+			Account: &addr,
+		},
 		prev:        stateObject.suicided,
 		prevbalance: new(big.Int).Set(stateObject.Balance()),
 	})
@@ -585,7 +591,7 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 	}
 	newobj = newObject(s, addr, types.StateAccount{})
 	if prev == nil {
-		s.journal.append(createObjectChange{account: &addr})
+		s.journal.append(createObjectChange{store: &createObjectChangeStore{Account: &addr}})
 	} else {
 		s.journal.append(resetObjectChange{prev: prev, prevdestruct: prevdestruct})
 	}
@@ -747,6 +753,7 @@ func (s *StateDB) Copy() *StateDB {
 			state.snapStorage[k] = temp
 		}
 	}
+	copy(state.blockJournal, s.blockJournal)
 	return state
 }
 
@@ -821,6 +828,13 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	if s.prefetcher != nil && len(addressesToPrefetch) > 0 {
 		s.prefetcher.prefetch(s.originalRoot, addressesToPrefetch)
 	}
+
+	if s.OptimizedMode {
+		for _, entry := range s.journal.entries {
+			s.blockJournal = append(s.blockJournal, entry)
+		}
+	}
+
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
 }
@@ -902,6 +916,97 @@ func (s *StateDB) clearJournalAndRefund() {
 		s.refund = 0
 	}
 	s.validRevisions = s.validRevisions[:0] // Snapshots can be created without journal entires
+}
+
+func (s *StateDB) ApplyJournal(blockHash common.Hash, interrupt *uint64) {
+	journal := s.loadJournal(blockHash)
+	if journal == nil {
+		return
+	}
+
+	for _, entry := range journal {
+		if interrupt != nil && atomic.LoadUint64(interrupt) == 1 {
+			return
+		}
+		entry.apply(s)
+	}
+}
+
+func (s *StateDB) loadJournal(blockHash common.Hash) []storedJournal {
+	rawBytes := rawdb.ReadStoredJournal(s.db.TrieDB().DiskDB(), blockHash)
+	return DecodeJournal(rawBytes)
+}
+
+func (s *StateDB) CommitJournal(blockHash common.Hash) {
+	var rawBytes []byte
+
+	// Loop from the tail of block journal to discard
+	// the overwritten entries
+	for i := len(s.blockJournal) - 1; i >= 0; i-- {
+		type addressAndType struct {
+			journalType uint8
+			address     common.Address
+			key         common.Hash
+		}
+		var (
+			entryType   uint8
+			storedEntry storedJournal
+			entry       journalEntry = s.blockJournal[i]
+			changeMap                = map[addressAndType]struct{}{}
+			keyHash     common.Hash
+		)
+
+		if storedEntry = entry.getStore(); storedEntry == nil {
+			continue
+		}
+
+		switch ent := entry.(type) {
+		case createObjectChange:
+			entryType = createObjectChangeStoreType
+		case touchChange:
+			entryType = touchChangeStoreType
+		case suicideChange:
+			entryType = suicideChangeStoreType
+		case balanceChange:
+			entryType = balanceChangeStoreType
+		case nonceChange:
+			entryType = nonceChangeStoreType
+		case codeChange:
+			entryType = codeChangeStoreType
+		case storageChange:
+			entryType = storageChangeStoreType
+			keyHash = ent.store.Key
+		default:
+			log.Error("Unknown stored journal type")
+			return
+		}
+
+		// In the block journal, any previous changes that has the same type, address
+		// and key are overwritten by the following changes so we don't need to store
+		// those to disk.
+		addressAndTypePair := addressAndType{entryType, *entry.dirtied(), keyHash}
+		if _, ok := changeMap[addressAndTypePair]; ok {
+			continue
+		} else {
+			changeMap[addressAndTypePair] = struct{}{}
+		}
+
+		// Because we loop from the tail, we need to prepend here to maintain to
+		// order in block journal
+		rawEntry, err := rlp.EncodeToBytes(storedEntry)
+		if err != nil {
+			log.Error("Failed to encode journal entry", "err", err)
+		}
+		rawBytes = append(rawEntry, rawBytes...)
+
+		rawType, err := rlp.EncodeToBytes(entryType)
+		if err != nil {
+			log.Error("Failed to encode journal type", "err", err)
+		}
+		rawBytes = append(rawType, rawBytes...)
+	}
+	rawdb.WriteStoredJournal(s.db.TrieDB().DiskDB(), blockHash, rawBytes)
+	s.blockJournal = make([]journalEntry, 0)
 }
 
 // Commit writes the state to the underlying in-memory trie database.
