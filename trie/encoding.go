@@ -94,7 +94,84 @@ func compactToHex(compact []byte) []byte {
 	return base[chop:]
 }
 
+func keybytes32ToToHex(str [32]byte) []byte {
+	l := len(str)*2 + 1
+	var nibbles = make([]byte, l)
+
+	nibbles[0*2] = str[0] / 16
+	nibbles[0*2+1] = str[0] % 16
+	nibbles[1*2] = str[1] / 16
+	nibbles[1*2+1] = str[1] % 16
+	nibbles[2*2] = str[2] / 16
+	nibbles[2*2+1] = str[2] % 16
+	nibbles[3*2] = str[3] / 16
+	nibbles[3*2+1] = str[3] % 16
+	nibbles[4*2] = str[4] / 16
+	nibbles[4*2+1] = str[4] % 16
+	nibbles[5*2] = str[5] / 16
+	nibbles[5*2+1] = str[5] % 16
+	nibbles[6*2] = str[6] / 16
+	nibbles[6*2+1] = str[6] % 16
+	nibbles[7*2] = str[7] / 16
+	nibbles[7*2+1] = str[7] % 16
+	nibbles[8*2] = str[8] / 16
+	nibbles[8*2+1] = str[8] % 16
+	nibbles[9*2] = str[9] / 16
+	nibbles[9*2+1] = str[9] % 16
+	nibbles[10*2] = str[10] / 16
+	nibbles[10*2+1] = str[10] % 16
+	nibbles[11*2] = str[11] / 16
+	nibbles[11*2+1] = str[11] % 16
+	nibbles[12*2] = str[12] / 16
+	nibbles[12*2+1] = str[12] % 16
+	nibbles[13*2] = str[13] / 16
+	nibbles[13*2+1] = str[13] % 16
+	nibbles[14*2] = str[14] / 16
+	nibbles[14*2+1] = str[14] % 16
+	nibbles[15*2] = str[15] / 16
+	nibbles[15*2+1] = str[15] % 16
+	nibbles[16*2] = str[16] / 16
+	nibbles[16*2+1] = str[16] % 16
+	nibbles[17*2] = str[17] / 16
+	nibbles[17*2+1] = str[17] % 16
+	nibbles[18*2] = str[18] / 16
+	nibbles[18*2+1] = str[18] % 16
+	nibbles[19*2] = str[19] / 16
+	nibbles[19*2+1] = str[19] % 16
+	nibbles[20*2] = str[20] / 16
+	nibbles[20*2+1] = str[20] % 16
+	nibbles[21*2] = str[21] / 16
+	nibbles[21*2+1] = str[21] % 16
+	nibbles[22*2] = str[22] / 16
+	nibbles[22*2+1] = str[22] % 16
+	nibbles[23*2] = str[23] / 16
+	nibbles[23*2+1] = str[23] % 16
+	nibbles[24*2] = str[24] / 16
+	nibbles[24*2+1] = str[24] % 16
+	nibbles[25*2] = str[25] / 16
+	nibbles[25*2+1] = str[25] % 16
+	nibbles[26*2] = str[26] / 16
+	nibbles[26*2+1] = str[26] % 16
+	nibbles[27*2] = str[27] / 16
+	nibbles[27*2+1] = str[27] % 16
+	nibbles[28*2] = str[28] / 16
+	nibbles[28*2+1] = str[28] % 16
+	nibbles[29*2] = str[29] / 16
+	nibbles[29*2+1] = str[29] % 16
+	nibbles[30*2] = str[30] / 16
+	nibbles[30*2+1] = str[30] % 16
+	nibbles[31*2] = str[31] / 16
+	nibbles[31*2+1] = str[31] % 16
+
+	nibbles[l-1] = 16
+	return nibbles
+}
+
 func keybytesToHex(str []byte) []byte {
+	if len(str) == 32 {
+		return keybytes32ToToHex(([32]byte)(str))
+	}
+
 	l := len(str)*2 + 1
 	var nibbles = make([]byte, l)
 	for i, b := range str {
