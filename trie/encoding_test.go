@@ -21,6 +21,8 @@ import (
 	"encoding/hex"
 	"math/rand"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func TestHexCompact(t *testing.T) {
@@ -127,6 +129,13 @@ func BenchmarkCompactToHex(b *testing.B) {
 
 func BenchmarkKeybytesToHex(b *testing.B) {
 	testBytes := []byte{7, 6, 6, 5, 7, 2, 6, 2, 16}
+	for i := 0; i < b.N; i++ {
+		keybytesToHex(testBytes)
+	}
+}
+
+func BenchmarkKeybytes32ToHex(b *testing.B) {
+	testBytes := crypto.Keccak256([]byte{7, 6, 6, 5, 7, 2, 6, 2, 16})
 	for i := 0; i < b.N; i++ {
 		keybytesToHex(testBytes)
 	}

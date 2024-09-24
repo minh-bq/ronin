@@ -508,6 +508,42 @@ func benchGet(b *testing.B, commit bool) {
 	}
 }
 
+func BenchmarkGetAccount(b *testing.B)   { benchGetAccount(b, false) }
+func BenchmarkGetAccountDB(b *testing.B) { benchGetAccount(b, true) }
+
+func benchGetAccount(b *testing.B, commit bool) {
+	trie := new(Trie)
+	if commit {
+		_, tmpdb := tempDB()
+		trie, _ = New(common.Hash{}, tmpdb)
+	}
+
+	// Create a realistic account trie to hash. We're first adding and hashing N
+	// entries, then adding N more.
+	addresses, accounts := makeAccounts(benchElemCount)
+	for i := range addresses {
+		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+	}
+
+	if commit {
+		trie.Commit(nil)
+	}
+
+	key := crypto.Keccak256(addresses[benchElemCount/2][:])
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		trie.Get(key)
+	}
+	b.StopTimer()
+
+	if commit {
+		ldb := trie.db.diskdb.(*leveldb.Database)
+		ldb.Close()
+		os.RemoveAll(ldb.Path())
+	}
+}
+
 func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 	trie := newEmpty()
 	k := make([]byte, 32)
