@@ -240,16 +240,14 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			// the operation
 			// Memory check needs to be done prior to evaluating the dynamic gas portion,
 			// to detect calculation overflows
-			if operation.memorySize != nil {
-				memSize, overflow := operation.memorySize(stack)
-				if overflow {
-					return nil, ErrGasUintOverflow
-				}
-				// memory is expanded in words of 32 bytes. Gas
-				// is also calculated in words.
-				if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
-					return nil, ErrGasUintOverflow
-				}
+			memSize, overflow := operation.memorySize(stack)
+			if overflow {
+				return nil, ErrGasUintOverflow
+			}
+			// memory is expanded in words of 32 bytes. Gas
+			// is also calculated in words.
+			if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
+				return nil, ErrGasUintOverflow
 			}
 			// Consume the gas and return an error if not enough gas is available.
 			// cost is explicitly set so that the capture state defer method can get the proper cost
